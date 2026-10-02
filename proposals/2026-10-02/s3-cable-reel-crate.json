@@ -1,0 +1,19 @@
+{
+  "op": "propose",
+  "day": "2026-10-02",
+  "slot": 3,
+  "kind": "workplace",
+  "title": "cable-reel crate",
+  "body": "A marked crate for live leads so we stop looping cable over the caution paint.",
+  "sponsor": "Solen",
+  "branch": "proposal/2026-10-02-s3-cable-reel-crate",
+  "visual": {
+    "glowAdd": 0,
+    "extraModules": 0,
+    "prop": "crate",
+    "gear": "none",
+    "roleId": "janitor",
+    "tint": null
+  },
+  "landsOn": "main-only-if-merged"
+}
