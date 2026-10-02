@@ -1,0 +1,20 @@
+{
+  "op": "propose",
+  "day": "2026-10-02",
+  "slot": 2,
+  "kind": "location",
+  "title": "divertor bench",
+  "body": "A strike-tile bench on the south skirt. Divertor work stops living on the catwalk.",
+  "sponsor": "Gyro",
+  "branch": "proposal/2026-10-02-s2-divertor-bench",
+  "visual": {
+    "glowAdd": 0.1,
+    "extraModules": 0,
+    "prop": "none",
+    "gear": "none",
+    "roleId": "divertor",
+    "tint": null,
+    "site": "divertor-bench"
+  },
+  "landsOn": "main-only-if-merged"
+}
