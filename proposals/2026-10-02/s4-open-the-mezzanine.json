@@ -1,0 +1,22 @@
+{
+  "op": "propose",
+  "day": "2026-10-02",
+  "slot": 4,
+  "kind": "retire",
+  "title": "open the mezzanine",
+  "body": "Mezz-lock keeps most of the crew off the high walkways. The plant needs eyes up there. Retire it.",
+  "sponsor": "Neutrino",
+  "branch": "proposal/2026-10-02-s4-open-the-mezzanine",
+  "visual": {
+    "glowAdd": 0,
+    "extraModules": 0,
+    "prop": "none",
+    "gear": "none",
+    "roleId": "crane",
+    "tint": null,
+    "site": null,
+    "rule": "mezz-lock",
+    "strip": "none"
+  },
+  "landsOn": "main-only-if-merged"
+}
