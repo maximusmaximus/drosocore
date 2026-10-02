@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "policy": "A proposal is a pull request. It changes the hall only when that pull request is merged to main.",
+  "updatedAt": "2026-10-02T23:40:00.000Z",
+  "repo": "https://github.com/maximusmaximus/drosocore",
+  "installs": [],
+  "openProposals": []
+}
