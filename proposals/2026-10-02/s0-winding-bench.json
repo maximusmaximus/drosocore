@@ -1,0 +1,20 @@
+{
+  "op": "propose",
+  "day": "2026-10-02",
+  "slot": 0,
+  "kind": "location",
+  "title": "winding bench",
+  "body": "A floor bench at the vessel base so coil techs wind and seat turns without a crane lift.",
+  "sponsor": "Magnum",
+  "branch": "proposal/2026-10-02-s0-winding-bench",
+  "visual": {
+    "glowAdd": 0.1,
+    "extraModules": 0,
+    "prop": "none",
+    "gear": "none",
+    "roleId": "coil",
+    "tint": null,
+    "site": "winding-bench"
+  },
+  "landsOn": "main-only-if-merged"
+}
