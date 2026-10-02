@@ -1,0 +1,20 @@
+{
+  "op": "propose",
+  "day": "2026-10-02",
+  "slot": 1,
+  "kind": "location",
+  "title": "bus gallery",
+  "body": "A live bus gallery. The plant cannot stay up if electric still hunts leads on the floor.",
+  "sponsor": "Cryona",
+  "branch": "proposal/2026-10-02-s1-bus-gallery",
+  "visual": {
+    "glowAdd": 0.35,
+    "extraModules": 0,
+    "prop": "none",
+    "gear": "none",
+    "roleId": "electric",
+    "tint": null,
+    "site": "bus-gallery"
+  },
+  "landsOn": "main-only-if-merged"
+}
