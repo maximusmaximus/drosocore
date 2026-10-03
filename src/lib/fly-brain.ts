@@ -34,6 +34,7 @@ export type BrainFn =
   | "spatial_map"
   | "conspecific_signal"
   | "talk_pulse"
+  | "talk_reward"
   | "tool_grasp"
   | "job_execute"
   | "reward_update"
@@ -90,6 +91,70 @@ export const ROLE_TRAINING: Record<RoleId, Partial<Record<RegionId, number>>> = 
   janitor: { vncWalk: 0.85, antennalLobe: 0.5, gnathal: 0.4 },
 };
 
+const extraTrain: Partial<Record<RoleId, Partial<Record<RegionId, number>>>> = {};
+
+export function ingestTraining(samples: { role: RoleId; region: RegionId; reward?: number }[]) {
+  for (const k of Object.keys(extraTrain) as RoleId[]) delete extraTrain[k];
+  for (const s of samples) {
+    const row = extraTrain[s.role] ?? (extraTrain[s.role] = {});
+    const add = 0.015 + (s.reward ?? 0.2) * 0.04;
+    row[s.region] = Math.min(1.25, (row[s.region] ?? 0) + add);
+  }
+}
+
+export function trainingFor(role: RoleId): Partial<Record<RegionId, number>> {
+  const base = ROLE_TRAINING[role] ?? {};
+  const add = extraTrain[role];
+  if (!add) return base;
+  const out: Partial<Record<RegionId, number>> = { ...base };
+  for (const [k, v] of Object.entries(add)) {
+    const id = k as RegionId;
+    out[id] = Math.min(1.25, (out[id] ?? 0) + (v ?? 0));
+  }
+  return out;
+}
+
+/**
+ * Trades that actually help each other on this pad. A conversation between
+ * these pairs is a handoff (coord). Same-role is shop talk. Everything else
+ * is social chatter — still rewarded, just less.
+ */
+export const ROLE_COLLAB: Record<RoleId, readonly RoleId[]> = {
+  welder: ["coil", "divertor", "builder", "inspector"],
+  coil: ["welder", "magnet", "crane", "electric"],
+  physicist: ["diag", "coder", "magnet"],
+  pipe: ["cryo", "vacuum"],
+  crane: ["builder", "coil"],
+  inspector: ["safety", "welder", "divertor"],
+  electric: ["magnet", "coder", "coil"],
+  cryo: ["pipe", "vacuum"],
+  builder: ["crane", "welder"],
+  safety: ["inspector", "janitor"],
+  diag: ["physicist", "magnet"],
+  coder: ["physicist", "electric"],
+  divertor: ["welder", "inspector", "vacuum"],
+  vacuum: ["pipe", "cryo", "divertor"],
+  magnet: ["coil", "electric", "physicist", "diag"],
+  janitor: ["safety"],
+};
+
+export type TalkKind = "shop" | "coord" | "social";
+
+export function talkKind(a: RoleId, b: RoleId): TalkKind {
+  if (a === b) return "shop";
+  if (ROLE_COLLAB[a]?.includes(b)) return "coord";
+  return "social";
+}
+
+export function talkQuality(
+  kind: TalkKind,
+  extra: { onSite?: boolean; hauling?: boolean } = {},
+): number {
+  const base = kind === "coord" ? 0.86 : kind === "shop" ? 0.7 : 0.28;
+  const bump = (extra.onSite ? 0.12 : 0) + (extra.hauling && kind !== "social" ? 0.1 : 0);
+  return clamp01(base + bump);
+}
+
 export type BrainTrace = {
   fn: BrainFn;
   regions: RegionId[];
@@ -110,8 +175,11 @@ export type FlyBrain = {
   act: Record<RegionId, number>;
   lastFns: BrainTrace[];
   jobsDone: number;
+  talksDone: number;
+  talkCredit: number;
   skill: number;
   reward: number;
+  talkBoost: number;
   motor: FlyMotor;
   talkIntent: number;
   workIntent: number;
@@ -127,6 +195,7 @@ export type BrainSense = {
   grounded: boolean;
   role: RoleId;
   time: number;
+  moving?: boolean;
 };
 
 function emptyAct(): Record<RegionId, number> {
@@ -143,9 +212,12 @@ export function createBrain(seed: number): FlyBrain {
     act,
     lastFns: [],
     jobsDone: Math.floor((Math.abs(Math.sin(seed * 9.1)) * 4) | 0),
+    talksDone: 0,
+    talkCredit: 0,
     skill: 0.08,
     reward: 0,
-    motor: { flap: 22, gait: 0, headYaw: 0, abdomen: 0, grasp: 0, airborne: 0, antennal: 0.12 },
+    talkBoost: 0,
+    motor: { flap: 6, gait: 0, headYaw: 0, abdomen: 0, grasp: 0, airborne: 0, antennal: 0.12 },
     talkIntent: 0,
     workIntent: 0,
     navigateIntent: 0.4,
@@ -173,18 +245,24 @@ function leak(v: number, drive: number, dt: number, tau = 0.18): number {
   return clamp01(v + (drive - v) * Math.min(1, dt / tau));
 }
 
+/** Jobs dominate; useful talk is a slower second channel onto the same skill. */
+export function skillFromWork(jobs: number, talks = 0): number {
+  return clamp01(1 - Math.exp(-(jobs + talks * 0.45) / 11));
+}
+
 export function skillFromJobs(jobs: number): number {
-  return clamp01(1 - Math.exp(-jobs / 11));
+  return skillFromWork(jobs, 0);
 }
 
 /**
  * One physics tick of the reduced CNS. Sensory drive → neuropil leak →
  * policy (navigate / talk / work) → VNC motor. Completing a job credits
- * the role's trained regions (DAN-like reward onto mushroom body).
+ * the role's trained regions (DAN-like reward onto mushroom body). A
+ * finished conversation does the same, scaled by how much it helps the job.
  */
 export function stepBrain(brain: FlyBrain, sense: BrainSense, dt: number): FlyBrain {
   const a = brain.act;
-  const train = ROLE_TRAINING[sense.role] ?? {};
+  const train = trainingFor(sense.role);
   const near = clamp01(sense.nearby);
   const dist = sense.distToTarget;
   const close = dist < 0.35;
@@ -202,25 +280,35 @@ export function stepBrain(brain: FlyBrain, sense: BrainSense, dt: number): FlyBr
   a.sez = leak(a.sez, (sense.cargo ? 0.55 : 0.12) + (sense.mode === "work" ? 0.7 : 0) + (train.sez ?? 0) * 0.2, dt);
   a.mushroomBody = leak(
     a.mushroomBody,
-    0.15 + brain.skill * 0.5 + brain.reward * 0.6 + (train.mushroomBody ?? 0) * 0.25,
+    0.15 + brain.skill * 0.5 + brain.reward * 0.6 + brain.talkBoost * 0.25 + (train.mushroomBody ?? 0) * 0.25,
     dt,
     0.32,
   );
   a.descending = leak(a.descending, a.centralComplex * 0.45 + a.aotu * 0.25 + a.mushroomBody * 0.25 + a.sez * 0.15, dt);
-  a.vncWalk = leak(a.vncWalk, sense.grounded ? a.descending * 0.85 + (train.vncWalk ?? 0) * 0.2 : 0.08, dt);
-  a.vncWing = leak(a.vncWing, sense.grounded ? 0.12 + a.descending * 0.2 : 0.35 + a.descending * 0.7, dt);
+  a.vncWalk = leak(
+    a.vncWalk,
+    sense.grounded
+      ? a.descending * (sense.moving === false ? 0.25 : 0.85) + (train.vncWalk ?? 0) * 0.2
+      : 0.06,
+    dt,
+  );
+  a.vncWing = leak(a.vncWing, sense.grounded ? 0.06 + a.descending * 0.12 : 0.42 + a.descending * 0.7, dt);
 
   brain.navigateIntent = clamp01(a.centralComplex * 0.5 + a.opticLobe * 0.3 + a.aotu * 0.3);
   brain.talkIntent = clamp01(a.lateralHorn * 0.55 + a.gnathal * 0.5 + near * 0.35);
   brain.workIntent = clamp01(a.mushroomBody * 0.4 + a.sez * 0.4 + (close ? 0.45 : 0) + (train.sez ?? 0) * 0.15);
 
   brain.reward = leak(brain.reward, 0, dt, 0.55);
-  brain.skill = skillFromJobs(brain.jobsDone);
+  brain.talkBoost = leak(brain.talkBoost, 0, dt, 6.5);
+  brain.skill = skillFromWork(brain.jobsDone, brain.talkCredit);
 
-  const airborne = sense.grounded ? 0.08 : clamp01(0.4 + a.vncWing);
+  const walking = Boolean(sense.grounded && sense.mode === "goto" && sense.moving !== false);
+  const airborne = leak(brain.motor.airborne, sense.grounded ? 0 : 1, dt, 0.07);
   brain.motor = {
-    flap: 14 + a.vncWing * 62 + (sense.mode === "dance" ? 28 : 0),
-    gait: a.vncWalk * 10,
+    flap: sense.grounded
+      ? (sense.mode === "dance" ? 54 : 0.4)
+      : 92 + a.vncWing * 42 + (sense.mode === "dance" ? 18 : 0),
+    gait: walking ? a.vncWalk * 12 : 0.08,
     headYaw: (a.aotu - 0.35) * 0.7,
     abdomen: a.sez * 0.35 + a.gnathal * 0.15,
     grasp: sense.cargo || sense.mode === "work" ? clamp01(0.4 + a.sez) : 0.08,
@@ -246,7 +334,7 @@ export function stepBrain(brain: FlyBrain, sense: BrainSense, dt: number): FlyBr
 
 /** Credit the trained neuropils after a completed haul or fetch. */
 export function rewardJob(brain: FlyBrain, role: RoleId, t: number): FlyBrain {
-  const train = ROLE_TRAINING[role] ?? {};
+  const train = trainingFor(role);
   let credit = 0.18;
   for (const id of REGION_IDS) {
     const w = train[id] ?? 0;
@@ -257,9 +345,56 @@ export function rewardJob(brain: FlyBrain, role: RoleId, t: number): FlyBrain {
   }
   brain.act.mushroomBody = clamp01(brain.act.mushroomBody + 0.35);
   brain.jobsDone += 1;
-  brain.skill = skillFromJobs(brain.jobsDone);
+  brain.skill = skillFromWork(brain.jobsDone, brain.talkCredit);
   brain.reward = clamp01(brain.reward + credit);
   pushFn(brain, "reward_update", ["mushroomBody"], t);
+  return brain;
+}
+
+/**
+ * DAN-like credit after a finished conversation. Social chatter is a small
+ * antennal / lateral-horn bump. Shop talk trains the role. Coordination with
+ * a partner trade is the big one — that is the talk that helps the next job.
+ */
+export function rewardTalk(
+  brain: FlyBrain,
+  role: RoleId,
+  partner: RoleId,
+  t: number,
+  extra: { onSite?: boolean; hauling?: boolean } = {},
+): FlyBrain {
+  const kind = talkKind(role, partner);
+  const quality = talkQuality(kind, extra);
+  const train = trainingFor(role);
+  const partnerTrain = trainingFor(partner);
+
+  brain.act.antennalLobe = clamp01(brain.act.antennalLobe + 0.18 * quality);
+  brain.act.lateralHorn = clamp01(brain.act.lateralHorn + 0.22 * quality);
+  brain.act.gnathal = clamp01(brain.act.gnathal + 0.16 * quality);
+
+  if (kind !== "social") {
+    for (const id of REGION_IDS) {
+      const own = train[id] ?? 0;
+      const shared = kind === "shop" ? own : Math.max(own, (partnerTrain[id] ?? 0) * 0.55);
+      if (shared > 0) brain.act[id] = clamp01(brain.act[id] + 0.16 * shared * quality);
+    }
+    brain.act.mushroomBody = clamp01(brain.act.mushroomBody + 0.28 * quality);
+  } else {
+    brain.act.mushroomBody = clamp01(brain.act.mushroomBody + 0.08);
+  }
+
+  const boost = (kind === "coord" ? 0.46 : kind === "shop" ? 0.32 : 0.1) * quality;
+  brain.talksDone += 1;
+  brain.talkCredit += (kind === "coord" ? 1 : kind === "shop" ? 0.7 : 0.18) * quality;
+  brain.talkBoost = clamp01(brain.talkBoost + boost);
+  brain.reward = clamp01(brain.reward + (kind === "social" ? 0.1 : 0.24) * quality);
+  brain.skill = skillFromWork(brain.jobsDone, brain.talkCredit);
+  pushFn(
+    brain,
+    "talk_reward",
+    kind === "social" ? ["lateralHorn", "antennalLobe"] : ["mushroomBody", "lateralHorn", "gnathal"],
+    t,
+  );
   return brain;
 }
 
@@ -268,8 +403,11 @@ export function cloneBrain(b: FlyBrain): FlyBrain {
     act: { ...b.act },
     lastFns: b.lastFns.map((t) => ({ fn: t.fn, regions: [...t.regions], t: t.t })),
     jobsDone: b.jobsDone,
+    talksDone: b.talksDone,
+    talkCredit: b.talkCredit,
     skill: b.skill,
     reward: b.reward,
+    talkBoost: b.talkBoost,
     motor: { ...b.motor },
     talkIntent: b.talkIntent,
     workIntent: b.workIntent,
@@ -293,6 +431,8 @@ export function fnLabel(fn: BrainFn): string {
       return "conspecific signal";
     case "talk_pulse":
       return "talk pulse";
+    case "talk_reward":
+      return "talk reward";
     case "tool_grasp":
       return "tool grasp";
     case "job_execute":

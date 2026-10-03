@@ -1,5 +1,7 @@
 export const APP_NAME = "DROSOCORE";
 export const GITHUB_URL = "https://github.com/maximusmaximus/drosocore";
+export const GITHUB_OWNER = "maximusmaximus";
+export const GITHUB_REPO = "drosocore";
 export const ETH_ADDRESS = "0xdAB2758BDCD16C6FB62c8626206084e4F3B88776";
 
 export const ISO_POLAR = Math.acos(1 / Math.sqrt(3));

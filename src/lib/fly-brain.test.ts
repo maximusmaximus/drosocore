@@ -1,15 +1,20 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ROLES } from "./roles.ts";
+import { ROLES, type RoleId } from "./roles.ts";
 import {
   BRAIN_REGIONS,
+  ROLE_COLLAB,
   ROLE_TRAINING,
   cloneBrain,
   createBrain,
   fnLabel,
   rewardJob,
+  rewardTalk,
   skillFromJobs,
+  skillFromWork,
   stepBrain,
+  talkKind,
+  talkQuality,
   topRegions,
   type BrainSense,
   type RegionId,
@@ -105,6 +110,90 @@ describe("job reward", () => {
   });
 });
 
+describe("shift talk reward", () => {
+  it("classifies shop talk, job coordination, and social chatter", () => {
+    assert.equal(talkKind("welder", "welder"), "shop");
+    assert.equal(talkKind("welder", "coil"), "coord");
+    assert.equal(talkKind("physicist", "coder"), "coord");
+    assert.equal(talkKind("janitor", "physicist"), "social");
+  });
+
+  it("keeps collaboration symmetric so a handoff pays both trades", () => {
+    const ids = ROLES.map((r) => r.id);
+    for (const a of ids) {
+      for (const b of ROLE_COLLAB[a]) {
+        assert.ok(ROLE_COLLAB[b].includes(a), `${a} ↔ ${b}`);
+      }
+    }
+  });
+
+  it("pays more for talk that helps the job than for idle chatter", () => {
+    assert.ok(talkQuality("coord") > talkQuality("shop"));
+    assert.ok(talkQuality("shop") > talkQuality("social"));
+    assert.ok(talkQuality("coord", { onSite: true, hauling: true }) > talkQuality("coord"));
+  });
+
+  it("credits antennal / lateral horn and mushroom body after a conversation", () => {
+    const b = createBrain(7);
+    const al = b.act.antennalLobe;
+    const lh = b.act.lateralHorn;
+    const mb = b.act.mushroomBody;
+    rewardTalk(b, "welder", "coil", 4, { onSite: true, hauling: true });
+    assert.equal(b.talksDone, 1);
+    assert.ok(b.act.antennalLobe > al);
+    assert.ok(b.act.lateralHorn > lh);
+    assert.ok(b.act.mushroomBody > mb);
+    assert.ok(b.talkBoost > 0.25);
+    assert.ok(b.reward > 0);
+    assert.equal(b.lastFns[0]?.fn, "talk_reward");
+  });
+
+  it("shop talk trains the role's own neuropils; social talk barely moves skill", () => {
+    const shop = createBrain(8);
+    const social = createBrain(8);
+    rewardTalk(shop, "physicist", "physicist", 2);
+    rewardTalk(social, "physicist", "janitor", 2);
+    assert.ok(shop.act.mushroomBody > social.act.mushroomBody);
+    assert.ok(shop.act.centralComplex > social.act.centralComplex);
+    assert.ok(shop.talkBoost > social.talkBoost);
+    assert.ok(shop.skill > social.skill);
+  });
+
+  it("coordination with a partner trade beats same-job shop talk", () => {
+    const shop = createBrain(9);
+    const coord = createBrain(9);
+    rewardTalk(shop, "cryo", "cryo", 3);
+    rewardTalk(coord, "cryo", "pipe", 3, { onSite: true, hauling: true });
+    assert.ok(coord.reward >= shop.reward);
+    assert.ok(coord.talkBoost > shop.talkBoost);
+  });
+
+  it("talks raise skill without counting as finished jobs", () => {
+    const b = createBrain(10);
+    const jobs = b.jobsDone;
+    rewardTalk(b, "coder", "electric", 5);
+    assert.equal(b.jobsDone, jobs);
+    assert.equal(b.talksDone, 1);
+    assert.ok(b.skill > skillFromJobs(jobs));
+    assert.ok(skillFromWork(4, 4) > skillFromWork(4, 0));
+    assert.ok(skillFromWork(4, 8) < skillFromWork(12, 0));
+  });
+
+  it("cloneBrain copies talk bookkeeping", () => {
+    const a = createBrain(11);
+    a.talksDone = 3;
+    a.talkBoost = 0.4;
+    a.talkCredit = 1.2;
+    const b = cloneBrain(a);
+    b.talksDone = 0;
+    b.talkBoost = 0;
+    b.talkCredit = 0;
+    assert.equal(a.talksDone, 3);
+    assert.equal(a.talkBoost, 0.4);
+    assert.equal(a.talkCredit, 1.2);
+  });
+});
+
 describe("labels", () => {
   it("names every function in plain english", () => {
     const fns: string[] = [];
@@ -114,6 +203,7 @@ describe("labels", () => {
       "spatial_map",
       "conspecific_signal",
       "talk_pulse",
+      "talk_reward",
       "tool_grasp",
       "job_execute",
       "reward_update",
@@ -133,6 +223,12 @@ describe("labels", () => {
     for (const role of ROLES) {
       for (const k of Object.keys(ROLE_TRAINING[role.id]) as RegionId[]) {
         assert.ok(ids.has(k), k);
+      }
+    }
+    for (const role of ROLES) {
+      for (const other of ROLE_COLLAB[role.id]) {
+        assert.ok(ids.size > 0);
+        assert.ok(ROLES.some((r) => r.id === (other as RoleId)));
       }
     }
   });
