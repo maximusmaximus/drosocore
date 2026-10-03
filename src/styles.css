@@ -1,0 +1,315 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0c0e10;
+  --color-surface: #16181c;
+  --color-surface-2: #1e2126;
+  --color-fg: #e8ecef;
+  --color-muted: #9aa3ad;
+  --color-subtle: #6b7380;
+  --color-accent: #5eead4;
+  --color-accent-fg: #0c0e10;
+  --color-border: color-mix(in oklab, var(--color-fg) 12%, transparent);
+  --color-fly: #c45c4a;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    min-height: 100dvh;
+    min-height: 100svh;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  .pointer-events-auto {
+    touch-action: manipulation;
+  }
+
+  input[type="range"] {
+    accent-color: var(--color-accent);
+  }
+
+  .select-all,
+  .select-text {
+    -webkit-user-select: all;
+    user-select: all;
+  }
+}
+
+.orbit-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.info-mark {
+  animation: info-pop 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes info-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.larva-wiggle {
+  transform-origin: 32px 26px;
+  animation: larva-crawl 0.9s ease-in-out infinite;
+}
+
+.pupa-breathe {
+  transform-origin: 32px 26px;
+  animation: pupa-pulse 1.6s ease-in-out infinite;
+}
+
+.wing-l {
+  transform-origin: 32px 22px;
+  animation: wing-beat 0.18s linear infinite;
+}
+
+.wing-r {
+  transform-origin: 32px 22px;
+  animation: wing-beat 0.18s linear infinite reverse;
+}
+
+.foreman-bob {
+  animation: foreman-bob 0.9s ease-in-out infinite;
+}
+
+.wizard-orbit {
+  animation: wizard-spin 3.2s linear infinite;
+}
+
+.tier-stage:not(.is-on) .larva-wiggle,
+.tier-stage:not(.is-on) .pupa-breathe,
+.tier-stage:not(.is-on) .wing-l,
+.tier-stage:not(.is-on) .wing-r,
+.tier-stage:not(.is-on) .foreman-bob,
+.tier-stage:not(.is-on) .wizard-orbit {
+  animation-play-state: paused;
+}
+
+@keyframes larva-crawl {
+  0%,
+  100% {
+    transform: translateX(-2px) rotate(-8deg) scaleX(1.05);
+  }
+  50% {
+    transform: translateX(3px) rotate(8deg) scaleX(0.92);
+  }
+}
+
+@keyframes pupa-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes wing-beat {
+  0%,
+  100% {
+    transform: rotate(12deg) scaleY(0.7);
+  }
+  50% {
+    transform: rotate(-16deg) scaleY(1);
+  }
+}
+
+@keyframes foreman-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes wizard-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cue-pulse {
+  position: relative;
+  box-shadow:
+    0 0 0 2px color-mix(in oklab, var(--color-accent) 85%, transparent),
+    0 0 18px color-mix(in oklab, var(--color-accent) 55%, transparent);
+  animation: cue-halo 1.35s ease-out infinite;
+}
+
+.cue-pop {
+  animation:
+    cue-halo 1.35s ease-out infinite,
+    cue-pop 1.35s ease-in-out infinite;
+}
+
+@keyframes cue-halo {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklab, var(--color-accent) 70%, transparent),
+      0 0 10px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  }
+  70% {
+    box-shadow:
+      0 0 0 10px color-mix(in oklab, var(--color-accent) 0%, transparent),
+      0 0 26px color-mix(in oklab, var(--color-accent) 60%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent),
+      0 0 10px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  }
+}
+
+@keyframes cue-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+
+.boot-orbit {
+  animation: boot-orbit-spin 3.6s linear infinite;
+}
+
+.boot-fly-hold {
+  animation: boot-orbit-unspin 3.6s linear infinite;
+}
+
+.boot-ring-pulse {
+  animation: boot-ring-breathe 2.4s ease-in-out infinite;
+}
+
+.boot-quote {
+  animation: boot-quote-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.notice-in {
+  animation: notice-in 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes boot-orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes boot-orbit-unspin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes boot-ring-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+
+@keyframes boot-quote-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .cue-pulse,
+  .cue-pop {
+    animation: none !important;
+    box-shadow:
+      0 0 0 3px color-mix(in oklab, var(--color-accent) 80%, transparent),
+      0 0 16px color-mix(in oklab, var(--color-accent) 50%, transparent);
+  }
+
+  .boot-orbit,
+  .boot-fly-hold,
+  .boot-ring-pulse,
+  .boot-quote,
+  .notice-in {
+    animation: none !important;
+  }
+}
